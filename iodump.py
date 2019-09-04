@@ -36,7 +36,6 @@ struct rw_args {
 // use regular array instead percpu array because
 // percpu array element size cannot be larger than 3k
 BPF_ARRAY(packet_array, struct packet, __NUM_CPUS__);
-BPF_ARRAY(rw_args, struct rw_args, __NUM_CPUS__);
 BPF_HASH(rw_buf, u32, struct rw_args);
 BPF_PERF_OUTPUT(events);
 
@@ -46,23 +45,17 @@ int kprobe_ksys_read_write(struct pt_regs *ctx,
     u64 pid_tgid = bpf_get_current_pid_tgid();
     u32 pid = pid_tgid >> 32;
     u32 tid = pid_tgid;
-    unsigned int n;
-    struct rw_args *args;
+    struct rw_args args = { 0 };
 
     if (pid != __PID__)
         return 0;
 
     __FD_FILTER__
 
-    n = bpf_get_smp_processor_id();
-    args = rw_args.lookup(&n);
-    if (args == NULL)
-        return 0;
+    args.fd = fd;
+    args.buf = buf;
 
-    args->fd = fd;
-    args->buf = buf;
-
-    rw_buf.update(&tid, args);
+    rw_buf.update(&tid, &args);
     return 0;
 }
 
